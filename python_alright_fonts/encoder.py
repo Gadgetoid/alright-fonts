@@ -86,8 +86,10 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
   return glyph
     
 class Encoder():
-  def __init__(self, font, quality = 1, complexity = 3):
+  def __init__(self, font, quality = 1, complexity = 3, variation = None):
     self.face = freetype.Face(font)
+    if variation is not None:
+      self.face.set_var_named_instance(variation)
     print(self.face.get_format())
     self.bbox_l = self.face.bbox.xMin
     self.bbox_t = self.face.bbox.yMin

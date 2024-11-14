@@ -20,6 +20,7 @@ parser.add_argument("--quality", type=str, choices=["low", "medium", "high"], de
 parser.add_argument("--characters", type=str, help="the list of characters that you want to extract. (default: ASCII character set)")
 parser.add_argument("--corpus", type=argparse.FileType("r"), help="corpus to select characters from")
 parser.add_argument("--quiet", action="store_true", help="suppress all progress and debug messages")
+parser.add_argument("--variation", type=str, help="set font variation to named instance (e.g. 'Bold')")
 parser.add_argument("out", type=str, help="the output filename")
 args = parser.parse_args()
 
@@ -40,7 +41,7 @@ quality_map = {
 }
 
 try:
-  encoder = Encoder(args.font, quality=quality_map[args.quality])
+  encoder = Encoder(args.font, quality=quality_map[args.quality], variation=args.variation)
 except:
   print("Failed to load font - stopping.")
   sys.exit(1)
