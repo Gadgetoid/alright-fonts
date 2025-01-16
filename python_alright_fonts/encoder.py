@@ -80,8 +80,17 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
   outline.decompose(glyph, move_to=move_to, line_to=line_to, conic_to=conic_to, cubic_to=cubic_to)
 
   # Simplify, scale and round the final contours
+  q = quality
   for i, c in enumerate(glyph.contours):
-    glyph.contours[i] = [Point(p[0], p[1]).scale(scale_factor, -scale_factor).round() for p in simplify_coords_vwp(c, quality)]
+    simplified = simplify_coords_vwp(c, q)
+    while len(simplified) > 65535:
+      q += 1
+      simplified = simplify_coords_vwp(c, q)
+      print(f"Reduced quality to {q}, got {len(simplified)} points...")
+      if q > 50:
+        raise RuntimeError(f"Could not fit glyph {i}, tried quality {q - 1}, got {len(simplified)} points!")
+
+    glyph.contours[i] = [Point(p[0], p[1]).scale(scale_factor, -scale_factor).round() for p in simplified]
 
   return glyph
     
@@ -141,9 +150,9 @@ class Encoder():
   def get_packed_glyph_paths(self, glyph):
     result = bytes()
     for contour in glyph.contours:
-      if len(contour) > 255:
+      if len(contour) > 65535:
         raise RuntimeError(f"Fatal: Contour too big! {len(contour)}")
-      result += struct.pack(">B", len(contour))
+      result += struct.pack(">H", len(contour))
     return result      
 
   def get_packed_glyph_path_points(self, glyph):

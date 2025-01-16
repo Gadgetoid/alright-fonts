@@ -10,6 +10,9 @@ import sys, argparse, struct, math, builtins
 from python_alright_fonts import Glyph, Point, Encoder
 
 
+FLAG_16BIT_POINT_COUNT = 0b0000001
+
+
 # parse command line arguments
 # ===========================================================================
 
@@ -40,7 +43,7 @@ quality_map = {
 }
 
 try:
-  encoder = Encoder(args.font, quality=quality_map[args.quality])
+  encoder = Encoder(args.font, quality=quality_map[args.quality], complexity=30)
 except:
   print("Failed to load font - stopping.")
   sys.exit(1)
@@ -111,7 +114,7 @@ if len(encoder.glyphs) == 0:
 print("  - header")
 result = bytes()
 result += b"af!?"
-result += struct.pack(">H", 0) # no flags to set
+result += struct.pack(">H", FLAG_16BIT_POINT_COUNT) # no flags to set
 result += struct.pack(">H", len(encoder.glyphs))
 result += struct.pack(">H", encoder.total_path_count())
 result += struct.pack(">H", encoder.total_point_count())
