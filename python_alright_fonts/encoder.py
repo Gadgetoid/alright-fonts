@@ -98,29 +98,35 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
       polygons = [polygon for polygon in polygons if polygon is not None]
 
       def merge_partial_overlaps(polygons):
-          def do_merge(polygons):
-              for i_a in range(0, len(polygons)):
-                  for i_b in range(0, len(polygons)):
-                      a = polygons[i_a]
-                      b = polygons[i_b]
-                      if shapely.overlaps(a, b):
-                          polygons[i_a] = shapely.union(a, b)
-                          polygons[i_b] = None
-                          return [polygon for polygon in polygons if polygon is not None]
-              return polygons
+        def any_overlaps(polygons):
+          for a in polygons:
+            for b in polygons:
+              if shapely.overlaps(a, b):
+                return True
+          return False
 
-          # TODO: A bruteforce number of merge passes isn't great
-          for _ in range(len(polygons) * len(polygons)):
-              polygons = do_merge(polygons)
+        def do_merge(polygons):
+          for i_a in range(len(polygons)):
+            for i_b in range(len(polygons)):
+              a = polygons[i_a]
+              b = polygons[i_b]
+              if a and b and shapely.overlaps(a, b):
+                polygons[i_a] = shapely.union(a, b)
+                polygons[i_b] = None
+          return [polygon for polygon in polygons if polygon is not None]
 
-          return polygons
+        # Merge until there are no (partially) overlapping polygons
+        while any_overlaps(polygons):
+          polygons = do_merge(polygons)
+
+        return polygons
 
       polygons = merge_partial_overlaps(polygons)
 
       valid = shapely.is_valid(polygons)
       for i in range(len(polygons)):
-          if not valid[i]:
-              polygons[i] = polygons[i].buffer(0)
+        if not valid[i]:
+          polygons[i] = polygons[i].buffer(0)
 
       # Resolve the polygons into inner/outer enclosed rings
       polygons = shapely.polygons(shapely.get_rings(polygons))
