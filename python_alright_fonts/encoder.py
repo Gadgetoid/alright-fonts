@@ -88,6 +88,15 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
 
       polygons = shapely.polygons([shapely.LinearRing(contour) for contour in glyph.contours])
       polygons = [poly.buffer(0) for poly in polygons]
+
+      # Collapse multipolygons
+      for i in range(len(polygons)):
+        if geoms := getattr(polygons[i], "geoms", None):
+          polygons += geoms
+          polygons[i] = None
+
+      polygons = [polygon for polygon in polygons if polygon is not None]
+
       def merge_partial_overlaps(polygons):
           def do_merge(polygons):
               for i_a in range(0, len(polygons)):
