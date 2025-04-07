@@ -12,6 +12,9 @@ class Point():
     else:
       self.x = 0
       self.y = 0
+
+  def __iter__(self):
+      return iter((self.x, self.y))
     
   def scale(self, scale_x, scale_y=None):
     if not scale_y:

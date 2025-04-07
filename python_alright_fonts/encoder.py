@@ -1,6 +1,7 @@
 import freetype, struct
 from . import Glyph, Point
 from simplification.cutil import simplify_coords_vwp
+import shapely
 
 
 def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
@@ -80,17 +81,56 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
   outline.decompose(glyph, move_to=move_to, line_to=line_to, conic_to=conic_to, cubic_to=cubic_to)
 
   # Simplify, scale and round the final contours
-  q = quality
-  for i, c in enumerate(glyph.contours):
-    simplified = simplify_coords_vwp(c, q)
-    while len(simplified) > 65535:
-      q += 1
-      simplified = simplify_coords_vwp(c, q)
-      print(f"Reduced quality to {q}, got {len(simplified)} points...")
-      if q > 50:
-        raise RuntimeError(f"Could not fit glyph {i}, tried quality {q - 1}, got {len(simplified)} points!")
+  use_shapely = True
+  if use_shapely:
+      if len(glyph.contours) == 0:
+        return glyph
 
-    glyph.contours[i] = [Point(p[0], p[1]).scale(scale_factor, -scale_factor).round() for p in simplified]
+      polygons = shapely.polygons([shapely.LinearRing(contour) for contour in glyph.contours])
+      polygons = [poly.buffer(0) for poly in polygons]
+      def merge_partial_overlaps(polygons):
+          def do_merge(polygons):
+              for i_a in range(0, len(polygons)):
+                  for i_b in range(0, len(polygons)):
+                      a = polygons[i_a]
+                      b = polygons[i_b]
+                      if shapely.overlaps(a, b):
+                          polygons[i_a] = shapely.union(a, b)
+                          polygons[i_b] = None
+                          return [polygon for polygon in polygons if polygon is not None]
+              return polygons
+
+          # TODO: A bruteforce number of merge passes isn't great
+          for _ in range(len(polygons) * len(polygons)):
+              polygons = do_merge(polygons)
+
+          return polygons
+
+      polygons = merge_partial_overlaps(polygons)
+
+      valid = shapely.is_valid(polygons)
+      for i in range(len(polygons)):
+          if not valid[i]:
+              polygons[i] = polygons[i].buffer(0)
+
+      # Resolve the polygons into inner/outer enclosed rings
+      polygons = shapely.polygons(shapely.get_rings(polygons))
+
+      polygons = shapely.coverage_simplify(polygons, tolerance=quality // 2)
+
+      glyph.contours = [[Point(x, y).scale(scale_factor, -scale_factor).round() for x, y in shapely.get_coordinates(poly)] for poly in polygons]
+  else:
+      q = quality
+      for i, c in enumerate(glyph.contours):
+        simplified = simplify_coords_vwp(c, q)
+        while len(simplified) > 65535:
+          q += 1
+          simplified = simplify_coords_vwp(c, q)
+          print(f"Reduced quality to {q}, got {len(simplified)} points...")
+          if q > 50:
+            raise RuntimeError(f"Could not fit glyph {i}, tried quality {q - 1}, got {len(simplified)} points!")
+
+        glyph.contours[i] = [Point(p[0], p[1]).scale(scale_factor, -scale_factor).round() for p in simplified]
 
   return glyph
     
