@@ -67,6 +67,8 @@ print("  - scale factor {}".format(round(encoder.scale_factor, 3)))
 # default to the standard ascii character set
 if not args.characters and not args.corpus:
   character_codepoints = [i for i in range(0, 128)]
+  character_codepoints.append(ord("£"))
+  character_codepoints.append(ord("°"))
 
 # user supplied list of characters as command line argument
 if args.characters:
