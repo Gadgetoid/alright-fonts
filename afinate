@@ -18,6 +18,7 @@ FLAG_16BIT_POINT_COUNT = 0b0000001
 
 parser = argparse.ArgumentParser(description="Create an Alright Font (.af) file containing the specified set of glyphs.")
 parser.add_argument("--font", type=argparse.FileType("rb"), required=True, help="the font (.ttf or .otf) that you want to extract glyphs from")
+parser.add_argument("--icon-font", type=argparse.FileType("rb"), required=True, help="the font (.ttf or .otf) that you want to extract glyphs from")
 parser.add_argument("--format", type=str, default="af", choices=["af", "c", "python"], help="the output format (either 'af', 'c', or 'python'")
 parser.add_argument("--quality", type=str, choices=["low", "medium", "high"], default="medium", help="the quality of decomposed bezier curves - affects font file size. (default: \"medium\")")
 parser.add_argument("--characters", type=str, help="the list of characters that you want to extract. (default: ASCII character set)")
@@ -42,7 +43,7 @@ quality_map = {
 }
 
 try:
-  encoder = Encoder(args.font, quality=quality_map[args.quality])
+  encoder = Encoder(args.font, args.icon_font, quality=quality_map[args.quality])
 except OSError:
   print("Failed to load font - stopping.")
   sys.exit(1)
@@ -64,15 +65,23 @@ print("  - scale factor {}".format(round(encoder.scale_factor, 3)))
 # ===========================================================================
 
 # default to the standard ascii character set
-if not args.characters and not args.corpus:
-  character_codepoints = [i for i in range(0, 1 << 16)]
-
-# user supplied list of characters as command line argument
-if args.characters:
-  character_codepoints = sorted([ord(c) for c in set(args.characters)])
+basic_latin = list(range(0x7f))
+latin_1_supplement = list(range(0x80, 0xff))
+latin_extended_a = list(range(0x0100, 0x017f))
+latin_extended_b =  list(range(0x0180, 0x024f))
+ipa_extensions = list(range(0x0250, 0x02af))
+spacing_modifiers = list(range(0x02b0, 0x02ff))
+diacritic_marks = list(range(0x0300, 0x036f))
+greek = list(range(0x0370, 0x03ff))
+cyrillic = list(range(0x0400, 0x04ff))
+armenian = list(range(0x0530, 0x058f))
+hebrew = list(range(0x590, 0x05ff))
+arabic = list(range(0x600, 0x06ff))
+hiragana = list(range(0x3040, 0x309f))
+katakana = list(range(0x30a0, 0x30ff))
+character_codepoints = basic_latin + latin_1_supplement + latin_extended_a + latin_extended_b
 
 # user supplied corpus file to extract characters from
-character_codepoints = []
 character_remaps = {}
 if args.corpus:
   while True:
@@ -80,7 +89,6 @@ if args.corpus:
     if not line:
       break
     try:
-      print(line, line.strip().split(" ")[1])
       line = line.strip().split(" ")
       if len(line) == 3: # name, codepoint, ASCII remap
         codepoint = int(line[1], base=16)
