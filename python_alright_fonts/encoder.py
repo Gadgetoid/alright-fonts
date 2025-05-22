@@ -216,8 +216,7 @@ def load_glyph(face, codepoint, scale_factor, quality=30, precision=2, target_bo
 class Encoder():
   def __init__(self, font, icon_font, quality = 30):
     self.face = freetype.Face(font)
-    self.icon_face = freetype.Face(icon_font)
-
+    self.icon_face = None if icon_font is None else freetype.Face(icon_font)
 
     print(self.face.get_format())
     self.bbox_l = self.face.bbox.xMin
@@ -250,7 +249,7 @@ class Encoder():
 
   def get_glyph(self, codepoint):
     if codepoint not in self.glyphs:
-      glyph = load_glyph(self.face if codepoint <= END_OF_TEXT else self.icon_face, codepoint, self.scale_factor, self.quality)
+      glyph = load_glyph(self.face if codepoint <= END_OF_TEXT or self.icon_face is None else self.icon_face, codepoint, self.scale_factor, self.quality)
       if not glyph:
         return None
       self.glyphs[codepoint] = glyph
@@ -258,7 +257,6 @@ class Encoder():
 
   def get_packed_glyph(self, glyph):
     pack_format = ">HbbBBBB"
-    print(glyph, len(glyph.contours))
     return struct.pack(
       pack_format, 
       glyph.codepoint,

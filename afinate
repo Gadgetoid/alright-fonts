@@ -13,18 +13,36 @@ from python_alright_fonts import Glyph, Point, Encoder
 FLAG_16BIT_POINT_COUNT = 0b0000001
 
 
+CODEPOINT_LOOKUP = {
+  "basic_latin": list(range(0x7f)),
+  "latin_1_supplement": list(range(0x80, 0xff)),
+  "latin_extended_a": list(range(0x0100, 0x017f)),
+  "latin_extended_b":  list(range(0x0180, 0x024f)),
+  "ipa_extensions": list(range(0x0250, 0x02af)),
+  "spacing_modifiers": list(range(0x02b0, 0x02ff)),
+  "diacritic_marks": list(range(0x0300, 0x036f)),
+  "greek": list(range(0x0370, 0x03ff)),
+  "cyrillic": list(range(0x0400, 0x04ff)),
+  "armenian": list(range(0x0530, 0x058f)),
+  "hebrew": list(range(0x590, 0x05ff)),
+  "arabic": list(range(0x600, 0x06ff)),
+  "hiragana": list(range(0x3040, 0x309f)),
+  "katakana": list(range(0x30a0, 0x30ff))
+}
+
+
 # parse command line arguments
 # ===========================================================================
 
 parser = argparse.ArgumentParser(description="Create an Alright Font (.af) file containing the specified set of glyphs.")
 parser.add_argument("--font", type=argparse.FileType("rb"), required=True, help="the font (.ttf or .otf) that you want to extract glyphs from")
-parser.add_argument("--icon-font", type=argparse.FileType("rb"), required=True, help="the font (.ttf or .otf) that you want to extract glyphs from")
+parser.add_argument("--icon-font", type=argparse.FileType("rb"), required=False, help="the font (.ttf or .otf) that you want to extract glyphs from")
 parser.add_argument("--format", type=str, default="af", choices=["af", "c", "python"], help="the output format (either 'af', 'c', or 'python'")
 parser.add_argument("--quality", type=str, choices=["low", "medium", "high"], default="medium", help="the quality of decomposed bezier curves - affects font file size. (default: \"medium\")")
-parser.add_argument("--characters", type=str, help="the list of characters that you want to extract. (default: ASCII character set)")
+parser.add_argument("--characters", type=str, choices=CODEPOINT_LOOKUP.keys(), help="A list of ", nargs="+")
 parser.add_argument("--corpus", type=argparse.FileType("r"), help="corpus to select characters from")
 parser.add_argument("--quiet", action="store_true", help="suppress all progress and debug messages")
-parser.add_argument("out", type=str, help="the output filename")
+parser.add_argument("--out", type=str, help="the output filename")
 args = parser.parse_args()
 
 # override print() to allow quiet mode to suppress output
@@ -65,21 +83,10 @@ print("  - scale factor {}".format(round(encoder.scale_factor, 3)))
 # ===========================================================================
 
 # default to the standard ascii character set
-basic_latin = list(range(0x7f))
-latin_1_supplement = list(range(0x80, 0xff))
-latin_extended_a = list(range(0x0100, 0x017f))
-latin_extended_b =  list(range(0x0180, 0x024f))
-ipa_extensions = list(range(0x0250, 0x02af))
-spacing_modifiers = list(range(0x02b0, 0x02ff))
-diacritic_marks = list(range(0x0300, 0x036f))
-greek = list(range(0x0370, 0x03ff))
-cyrillic = list(range(0x0400, 0x04ff))
-armenian = list(range(0x0530, 0x058f))
-hebrew = list(range(0x590, 0x05ff))
-arabic = list(range(0x600, 0x06ff))
-hiragana = list(range(0x3040, 0x309f))
-katakana = list(range(0x30a0, 0x30ff))
-character_codepoints = basic_latin + latin_1_supplement + latin_extended_a + latin_extended_b
+character_codepoints = []
+
+for character_set in args.characters:
+  character_codepoints += CODEPOINT_LOOKUP[character_set]
 
 # user supplied corpus file to extract characters from
 character_remaps = {}
@@ -128,7 +135,7 @@ for codepoint in character_codepoints:
     print("  \\u{:04x} missing or not printable, skipping".format(codepoint))
 
 # write glyph dictionary to file
-print("> write output file in {} format".format(format))
+print("> write output file in {} format".format(args.format))
 
 if len(encoder.glyphs) == 0:
   print("No printable glyphs - stopping.")
