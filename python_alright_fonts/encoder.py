@@ -1,16 +1,20 @@
 import freetype, struct
-from . import Glyph, Point
+from . import Bounds, Glyph, Point
 from simplification.cutil import simplify_coords_vwp
+import shapely
+
+DEBUG = True
 
 
-def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
+def load_glyph(face, codepoint, scale_factor, quality=30, precision=2, target_bounds=None, offset=None, include_bounding_box=False):
   # glyph doesn't exist in face
   if face.get_char_index(codepoint) == 0:
     return None
 
   # glyph isn't printable
-  if not chr(codepoint).isprintable():
-    return None
+  #if not chr(codepoint).isprintable():
+  #  print("Glyph not printable")
+  #  return None
 
   # load the glyph
   face.load_char(codepoint, freetype.FT_LOAD_PEDANTIC)
@@ -19,13 +23,26 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
   glyph.codepoint = codepoint # utf-8 codepoint or ascii character code
   glyph.advance = round(face.glyph.metrics.horiAdvance * scale_factor)    
 
-  # bounding box
-  bbox = face.glyph.outline.get_bbox()
-  glyph.bbox_x = round( bbox.xMin * scale_factor)
-  glyph.bbox_y = round( bbox.yMin * scale_factor)
-  glyph.bbox_w = round((bbox.xMax - bbox.xMin) * scale_factor)
-  glyph.bbox_h = round((bbox.yMax - bbox.yMin) * scale_factor)
-  
+  source_bounds = Bounds(face.glyph.outline.get_bbox())
+
+  target_bounds = target_bounds or Bounds(255, 255)
+  offset = offset or Point(0, 0)
+
+  scale_x = source_bounds.width / target_bounds.width
+  scale_y = source_bounds.height / target_bounds.height
+
+  scale_factor = max(scale_x, scale_y)
+
+  print(f"> target bounds: {target_bounds.width:.2f} x {target_bounds.height:.2f}")
+  print(f"> source bounds: {source_bounds.width:.2f} x {source_bounds.height:.2f}")
+  print(f"> scale: {scale_x:.6f} x {scale_y:.6f}")
+  print(f"> scale factor: {scale_factor:.6f}")
+
+  #print(f"w: {scaled_width}, h: {scaled_height}")
+  #offset_x = ((target_width - scaled_width) / 2) - tbxMin
+  #offset_y = ((target_height - scaled_height) / 2) - tbyMin
+
+
   # extract glyph contours
   outline = face.glyph.outline
   glyph.contours = []
@@ -52,10 +69,12 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
     c1 = Point(c1.x, c1.y)
     dst = Point(dst.x, dst.y)
 
+    distance = int(src.distance(c1) + c1.distance(dst))
+    #if DEBUG: print(f"Decomposing conic curve with distance: {distance}")
+
     # simplify_coords_vwp will discard overlapping/proximal/redundant coords
-    for i in range(complexity):
-      t = i / complexity
-      ctx.contours[-1].append(quadratic_bezier(t, src, c1, dst))
+    for i in range(distance):
+      ctx.contours[-1].append(quadratic_bezier(i / distance, src, c1, dst))
 
   def cubic_bezier(t, src, c1, c2, dst):
     return [
@@ -72,31 +91,128 @@ def load_glyph(face, codepoint, scale_factor, quality=1, complexity=3):
     c2 = Point(c2.x, c2.y)
     dst = Point(dst.x, dst.y)
 
+    distance = src.distance(c1) + c1.distance(c2) + c2.distance(dst)
+    #if DEBUG: print(f"Decomposing cubic curve with distance: {distance}")
+
     # simplify_coords_vwp will discard overlapping/proximal/redundant coords
-    for i in range(complexity):
-      t = i / complexity
-      ctx.contours[-1].append(cubic_bezier(t, src, c1, c2, dst))
+    for i in range(distance):
+      ctx.contours[-1].append(cubic_bezier(i / distance, src, c1, c2, dst))
 
   outline.decompose(glyph, move_to=move_to, line_to=line_to, conic_to=conic_to, cubic_to=cubic_to)
 
-  # Simplify, scale and round the final contours
-  q = quality
-  for i, c in enumerate(glyph.contours):
-    simplified = simplify_coords_vwp(c, q)
-    while len(simplified) > 65535:
-      q += 1
-      simplified = simplify_coords_vwp(c, q)
-      print(f"Reduced quality to {q}, got {len(simplified)} points...")
-      if q > 50:
-        raise RuntimeError(f"Could not fit glyph {i}, tried quality {q - 1}, got {len(simplified)} points!")
+  # SHAPELY
+  use_shapely = True
+  if use_shapely:
+      polygons = shapely.polygons([shapely.LinearRing(contour) for contour in glyph.contours if len(contour) > 3])
+      polygons = [poly.buffer(0) for poly in polygons]
 
-    glyph.contours[i] = [Point(p[0], p[1]).scale(scale_factor, -scale_factor).round() for p in simplified]
+      # Collapse multipolygons
+      for i in range(len(polygons)):
+          if geoms := getattr(polygons[i], "geoms", None):
+              polygons += geoms
+              polygons[i] = None
+
+      polygons = [polygon for polygon in polygons if polygon is not None]
+
+      def merge_partial_overlaps(polygons):
+          def any_overlaps(polygons):
+              for a in polygons:
+                  for b in polygons:
+                      if shapely.overlaps(a, b):
+                          return True
+              return False
+
+          def do_merge(polygons):
+              for i_a in range(len(polygons)):
+                  for i_b in range(len(polygons)):
+                      a = polygons[i_a]
+                      b = polygons[i_b]
+                      if a and b and shapely.overlaps(a, b):
+                          polygons[i_a] = shapely.union(a, b)
+                          polygons[i_b] = None
+              return [polygon for polygon in polygons if polygon is not None]
+
+          # Merge until there are no (partially) overlapping polygons
+          while any_overlaps(polygons):
+              polygons = do_merge(polygons)
+
+          return polygons
+      
+      polygons = merge_partial_overlaps(polygons)
+
+      valid = shapely.is_valid(polygons)
+      for i in range(len(polygons)):
+          if not valid[i]:
+              polygons[i] = polygons[i].buffer(0)
+
+      # Resolve the polygons into inner/outer enclosed rings
+      polygons = shapely.polygons(shapely.get_rings(polygons))
+
+      polygons = shapely.coverage_simplify(polygons, tolerance=quality // 2)
+
+      p_scale = Point(scale_factor, -scale_factor)
+      glyph.contours = [[Point(x, y) / p_scale for x, y in shapely.get_coordinates(poly)] for poly in polygons]
+
+  else:
+      # Simplify, scale and round the final contours
+      for i, c in enumerate(glyph.contours):
+          glyph.contours[i] = [
+              Point(p) / Point(scale_factor, -scale_factor)
+              for p in simplify_coords_vwp(c, quality)
+          ]
+
+  # Get the scaled bounding box
+  actual_bounds = Bounds(65535, 65535, -65535, -65535)
+
+  for c in glyph.contours:
+      for point in c:
+          actual_bounds.update(point)
+
+  print(f"> scaled bounds: {actual_bounds.x:.2f} {actual_bounds.y:.2f} {actual_bounds.x2:.2f} {actual_bounds.y2:.2f}")
+
+  # Cancel out any offset to align to the top left
+  offset += Point(-actual_bounds.x, -actual_bounds.y)
+
+  # Calculate an offset based on the bounding box and center the result
+  offset.x += (target_bounds.width - actual_bounds.width) / 2
+  offset.y += (target_bounds.height - actual_bounds.height) / 2
+
+  # Move to the center of our target bounds
+  offset.x -= target_bounds.width / 2
+  offset.y -= target_bounds.height / 2
+
+  print(f"> offset: {offset.x:.2f}:{offset.y:.2f}")
+
+  for c in glyph.contours:
+      for p in c:
+          p.set(round(p + offset, precision))
+
+  if include_bounding_box:
+      glyph.contours.insert(0, target_bounds.contour)
+
+  # A contour *must* have at least three points. Discard any invalid contours.
+  old_size = len(glyph.contours)
+  glyph.contours = [contour for contour in glyph.contours if len(contour) > 2]
+
+  print(f"> result: {len(glyph.contours)} contours with {sum(len(c) for c in glyph.contours)} points")
+
+  if old_size > len(glyph.contours):
+      print(f"> result: {old_size - len(glyph.contours)} invalid contour(s) skipped!")
+
+  glyph.bbox_x = int(target_bounds.x)
+  glyph.bbox_y = int(target_bounds.y)
+  glyph.bbox_w = int(target_bounds.width)
+  glyph.bbox_h = int(target_bounds.height)
 
   return glyph
     
 class Encoder():
-  def __init__(self, font, quality = 1, complexity = 3):
+  def __init__(self, font, quality = 30):
     self.face = freetype.Face(font)
+
+
+    print(dir(self.face))
+
     print(self.face.get_format())
     self.bbox_l = self.face.bbox.xMin
     self.bbox_t = self.face.bbox.yMin
@@ -106,7 +222,6 @@ class Encoder():
     self.packed_glyph_contours = {}
 
     self.quality = quality
-    self.complexity = complexity
 
     normalising_scale_factor = max(
       abs(self.bbox_l), abs(self.bbox_t), 
@@ -128,7 +243,7 @@ class Encoder():
 
   def get_glyph(self, codepoint):
     if codepoint not in self.glyphs:
-      glyph = load_glyph(self.face, codepoint, self.scale_factor, self.quality, self.complexity)
+      glyph = load_glyph(self.face, codepoint, self.scale_factor, self.quality)
       if not glyph:
         return None
       self.glyphs[codepoint] = glyph
@@ -136,9 +251,10 @@ class Encoder():
 
   def get_packed_glyph(self, glyph):
     pack_format = ">HbbBBBB"
+    print(glyph, len(glyph.contours))
     return struct.pack(
       pack_format, 
-      glyph.codepoint, 
+      glyph.codepoint,
       glyph.bbox_x, 
       glyph.bbox_y, 
       glyph.bbox_w, 
@@ -159,7 +275,8 @@ class Encoder():
     result = bytes()
     for contour in glyph.contours:      
       for point in contour:
-        result += struct.pack(">bb", point.x, point.y)
+        print(int(point.x), int(point.y))
+        result += struct.pack(">bb", int(point.x), int(point.y))
     return result      
 
   def total_path_count(self):

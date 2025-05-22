@@ -31,7 +31,6 @@ def print(*a, **kw):
   if not args.quiet:
     builtins.print(*a, **kw)
 
-
 # load the requested font file
 # ===========================================================================
 
@@ -43,8 +42,8 @@ quality_map = {
 }
 
 try:
-  encoder = Encoder(args.font, quality=quality_map[args.quality], complexity=30)
-except:
+  encoder = Encoder(args.font, quality=quality_map[args.quality])
+except OSError:
   print("Failed to load font - stopping.")
   sys.exit(1)
 
@@ -66,19 +65,32 @@ print("  - scale factor {}".format(round(encoder.scale_factor, 3)))
 
 # default to the standard ascii character set
 if not args.characters and not args.corpus:
-  character_codepoints = [i for i in range(0, 128)]
+  character_codepoints = [i for i in range(0, 1 << 16)]
 
 # user supplied list of characters as command line argument
 if args.characters:
   character_codepoints = sorted([ord(c) for c in set(args.characters)])
 
 # user supplied corpus file to extract characters from
+character_codepoints = []
+character_remaps = {}
 if args.corpus:
   while True:
     line = args.corpus.readline()
     if not line:
       break
-    character_codepoints = sorted(set(character_codepoints + [ord(c) for c in line]))
+    try:
+      print(line, line.strip().split(" ")[1])
+      line = line.strip().split(" ")
+      if len(line) == 3: # name, codepoint, ASCII remap
+        codepoint = int(line[1], base=16)
+        remap = ord(line[2])
+        character_codepoints.append(codepoint)
+        character_remaps[codepoint] = remap
+      else: # name, codepoint
+        character_codepoints.append(int(line[1], base=16))
+    except ValueError:
+      character_codepoints = sorted(set(character_codepoints + [ord(c) for c in line]))
 
 
 # extract the glyph metrics and contours for all printable glyphs
@@ -93,15 +105,19 @@ for codepoint in character_codepoints:
   glyph = encoder.get_glyph(codepoint)
 
   if glyph:
-    print("  \\u{:04} {} : {:>2} contours / {:>3} points".format(
+    print("  \\u{:04x} {} : {:>2} contours / {:>3} points".format(
       codepoint, 
       "'" + chr(codepoint) + "'", 
       len(glyph.contours), 
       sum([len(c) for c in glyph.contours])
     ))
     printable_count += 1
+
+    if glyph.codepoint in character_remaps.keys():
+      print("  \\u{:04x} remapped to \\u{:04x}".format(codepoint, character_remaps[glyph.codepoint]))
+      glyph.codepoint = character_remaps[glyph.codepoint]
   else:
-    print("  \\u{:04} missing or not printable, skipping".format(codepoint))
+    print("  \\u{:04x} missing or not printable, skipping".format(codepoint))
 
 # write glyph dictionary to file
 print("> write output file in {} format".format(format))
