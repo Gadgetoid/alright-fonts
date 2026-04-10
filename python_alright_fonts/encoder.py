@@ -1,6 +1,6 @@
-import freetype, struct
+import freetype
+import struct
 from . import Bounds, Glyph, Point
-from simplification.cutil import simplify_coords_vwp
 import shapely
 
 DEBUG = True
@@ -294,4 +294,5 @@ class Encoder():
     for glyph in self.glyphs:
       for contour in self.glyphs[glyph].contours:
         total += len(contour)
-    return total  
+    return total
+
