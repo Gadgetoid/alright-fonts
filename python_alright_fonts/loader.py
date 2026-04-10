@@ -1,6 +1,6 @@
 import sys
 import struct
-from . import Glyph, Point, Face
+from .util import Glyph, Point, Face
 
 def extract_contours(data):
   contours = []

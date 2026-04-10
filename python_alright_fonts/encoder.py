@@ -1,6 +1,6 @@
 import freetype
 import struct
-from . import Bounds, Glyph, Point
+from .util import Bounds, Glyph, Point
 import shapely
 
 DEBUG = True
