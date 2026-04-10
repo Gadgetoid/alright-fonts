@@ -85,8 +85,11 @@ print("  - scale factor {}".format(round(encoder.scale_factor, 3)))
 # default to the standard ascii character set
 character_codepoints = []
 
-for character_set in args.characters:
-  character_codepoints += CODEPOINT_LOOKUP[character_set]
+if args.characters is None and args.corpus is None:
+  character_codepoints += CODEPOINT_LOOKUP["basic_latin"]
+else:
+  for character_set in args.characters:
+    character_codepoints += CODEPOINT_LOOKUP[character_set]
 
 # user supplied corpus file to extract characters from
 character_remaps = {}
