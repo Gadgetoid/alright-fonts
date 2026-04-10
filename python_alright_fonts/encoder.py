@@ -244,7 +244,7 @@ class Encoder():
     try:
       del self.face
       del self.icon_font
-    except NameError:
+    except AttributeError:
       pass
 
   def get_glyph(self, codepoint):
