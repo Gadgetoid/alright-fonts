@@ -1,6 +1,9 @@
 import math
 import freetype
 
+from python_alright_fonts.encoder import Encoder
+from python_alright_fonts.loader import load_font
+
 
 class Point:
     def __init__(self, *args):
@@ -112,7 +115,7 @@ class Glyph():
     self.bbox_w = None
     self.bbox_h = None
     self.contours = []
-  
+
   def __repr__(self):
     return "{} ({},{}: {}x{}) [{}]".format(self.codepoint, self.bbox_x, self.bbox_y, self.bbox_w, self.bbox_h, self.advance)
 
@@ -125,7 +128,8 @@ class Face():
     if codepoint not in self.glyphs:
       return None
 
-    return self.glyphs[codepoint]    
+    return self.glyphs[codepoint]
 
-from python_alright_fonts.encoder import Encoder
-from python_alright_fonts.loader import load_font
+
+
+__all__ = ["Encoder", "load_font", "Point", "Bounds", "Glyph", "Face"]

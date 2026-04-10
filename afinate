@@ -6,8 +6,11 @@
 # to provide a way for microcontroller based projects to render high quality
 # vector fonts.
 
-import sys, argparse, struct, math, builtins
-from python_alright_fonts import Glyph, Point, Encoder
+import sys
+import argparse
+import struct
+import builtins
+from python_alright_fonts import Encoder
 
 
 FLAG_16BIT_POINT_COUNT = 0b0000001
@@ -148,7 +151,7 @@ if len(encoder.glyphs) == 0:
 print("  - header")
 result = bytes()
 result += b"af!?"
-result += struct.pack(">H", FLAG_16BIT_POINT_COUNT) # no flags to set
+result += struct.pack(">H", FLAG_16BIT_POINT_COUNT)
 result += struct.pack(">H", len(encoder.glyphs))
 result += struct.pack(">H", encoder.total_path_count())
 result += struct.pack(">H", encoder.total_point_count())

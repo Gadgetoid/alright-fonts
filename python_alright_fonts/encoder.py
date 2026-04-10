@@ -21,7 +21,7 @@ def load_glyph(face, codepoint, scale_factor, quality=30, precision=2, target_bo
   # load the glyph
   face.load_char(codepoint, freetype.FT_LOAD_PEDANTIC)
 
-  glyph = Glyph() 
+  glyph = Glyph()
   glyph.codepoint = codepoint # utf-8 codepoint or ascii character code
 
   source_bounds = Bounds(face.glyph.outline.get_bbox())
@@ -33,7 +33,7 @@ def load_glyph(face, codepoint, scale_factor, quality=30, precision=2, target_bo
   scale_y = source_bounds.height / target_bounds.height
 
   if codepoint >= END_OF_TEXT:
-    scale_factor = max(scale_x, scale_y) 
+    scale_factor = max(scale_x, scale_y)
 
   print(f"> target bounds: {target_bounds.width:.2f} x {target_bounds.height:.2f}")
   print(f"> source bounds: {source_bounds.width:.2f} x {source_bounds.height:.2f}")
@@ -142,7 +142,7 @@ def load_glyph(face, codepoint, scale_factor, quality=30, precision=2, target_bo
               polygons = do_merge(polygons)
 
           return polygons
-      
+
       polygons = merge_partial_overlaps(polygons)
 
       valid = shapely.is_valid(polygons)
@@ -209,10 +209,10 @@ def load_glyph(face, codepoint, scale_factor, quality=30, precision=2, target_bo
     glyph.bbox_y = int( bbox.yMin / scale_factor)
     glyph.bbox_w = int((bbox.xMax - bbox.xMin) / scale_factor)
     glyph.bbox_h = int((bbox.yMax - bbox.yMin) / scale_factor)
-    glyph.advance = round(face.glyph.metrics.horiAdvance / scale_factor)   
+    glyph.advance = round(face.glyph.metrics.horiAdvance / scale_factor)
 
   return glyph
-    
+
 class Encoder():
   def __init__(self, font, icon_font, quality = 30):
     self.face = freetype.Face(font)
@@ -229,7 +229,7 @@ class Encoder():
     self.quality = quality
 
     normalising_scale_factor = max(
-      abs(self.bbox_l), abs(self.bbox_t), 
+      abs(self.bbox_l), abs(self.bbox_t),
       abs(self.bbox_r), abs(self.bbox_b))
 
     self.scale_factor = normalising_scale_factor / 127
@@ -244,8 +244,8 @@ class Encoder():
     try:
       del self.face
       del self.icon_font
-    except:
-      pass 
+    except NameError:
+      pass
 
   def get_glyph(self, codepoint):
     if codepoint not in self.glyphs:
@@ -258,12 +258,12 @@ class Encoder():
   def get_packed_glyph(self, glyph):
     pack_format = ">HbbBBBB"
     return struct.pack(
-      pack_format, 
+      pack_format,
       glyph.codepoint,
-      glyph.bbox_x, 
-      glyph.bbox_y, 
-      glyph.bbox_w, 
-      glyph.bbox_h, 
+      glyph.bbox_x,
+      glyph.bbox_y,
+      glyph.bbox_w,
+      glyph.bbox_h,
       glyph.advance,
       len(glyph.contours)
     )
@@ -274,21 +274,21 @@ class Encoder():
       if len(contour) > 65535:
         raise RuntimeError(f"Fatal: Contour too big! {len(contour)}")
       result += struct.pack(">H", len(contour))
-    return result      
+    return result
 
   def get_packed_glyph_path_points(self, glyph):
     result = bytes()
-    for contour in glyph.contours:      
+    for contour in glyph.contours:
       for point in contour:
         result += struct.pack(">bb", int(point.x), int(point.y))
-    return result      
+    return result
 
   def total_path_count(self):
     total = 0
     for glyph in self.glyphs:
       total += len(self.glyphs[glyph].contours)
     return total
-  
+
   def total_point_count(self):
     total = 0
     for glyph in self.glyphs:
